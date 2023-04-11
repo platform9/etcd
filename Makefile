@@ -51,8 +51,8 @@ docker-remove:
 
 
 
-GO_VERSION ?= 1.12.17
-ETCD_VERSION ?= $(shell git rev-parse --short HEAD || echo "GitNotFound")
+GO_VERSION ?= 1.17.13
+ETCD_UPSTREAM_VERSION ?= $(shell git rev-parse --short HEAD || echo "GitNotFound")
 
 TEST_SUFFIX = $(shell date +%s | base64 | head -c 15)
 TEST_OPTS ?= PASSES='unit'
@@ -62,7 +62,19 @@ ifdef HOST_TMP_DIR
 	TMP_DIR_MOUNT_FLAG = --mount type=bind,source=$(HOST_TMP_DIR),destination=/tmp
 endif
 
+registry_url = docker.io
+etcd_image_name = ${registry_url}/platform9/etcd
+DOCKERFILE?=$(CURDIR)/Dockerfile
 
+ETCD_VERSION = $(ETCD_UPSTREAM_VERSION)-pmk-$(TEAMCITY_BUILD_ID)
+PF9_IMAGE_TAG=$(etcd_image_name):${ETCD_VERSION}
+DOCKERARGS=
+ifdef HTTP_PROXY
+	DOCKERARGS += --build-arg http_proxy=$(HTTP_PROXY)
+endif
+ifdef HTTPS_PROXY
+	DOCKERARGS += --build-arg https_proxy=$(HTTPS_PROXY)
+endif
 
 # Example:
 #   GO_VERSION=1.12.17 make build-docker-test
@@ -189,19 +201,19 @@ build-docker-release-master:
 	$(info ETCD_VERSION: $(ETCD_VERSION))
 	cp ./Dockerfile-release ./bin/Dockerfile-release
 	docker build \
-	  --tag gcr.io/etcd-development/etcd:$(ETCD_VERSION) \
+	  --tag $(PF9_IMAGE_TAG) \
 	  --file ./bin/Dockerfile-release \
 	  ./bin
 	rm -f ./bin/Dockerfile-release
 
 	docker run \
 	  --rm \
-	  gcr.io/etcd-development/etcd:$(ETCD_VERSION) \
+	  $(PF9_IMAGE_TAG) \
 	  /bin/sh -c "/usr/local/bin/etcd --version && /usr/local/bin/etcdctl version"
 
 push-docker-release-master:
 	$(info ETCD_VERSION: $(ETCD_VERSION))
-	gcloud docker -- push gcr.io/etcd-development/etcd:$(ETCD_VERSION)
+	gcloud docker -- push $(PF9_IMAGE_TAG)
 
 
 
