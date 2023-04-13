@@ -52,7 +52,7 @@ docker-remove:
 
 
 GO_VERSION ?= 1.17.13
-ETCD_UPSTREAM_VERSION ?= $(shell git rev-parse --short HEAD || echo "GitNotFound")
+ETCD_VERSION ?= $(shell git rev-parse --short HEAD || echo "GitNotFound")
 
 TEST_SUFFIX = $(shell date +%s | base64 | head -c 15)
 TEST_OPTS ?= PASSES='unit'
@@ -63,11 +63,11 @@ ifdef HOST_TMP_DIR
 endif
 
 registry_url = docker.io
-etcd_image_name = ${registry_url}/platform9/etcd
-DOCKERFILE?=$(CURDIR)/Dockerfile
-
-ETCD_VERSION = $(ETCD_UPSTREAM_VERSION)-pmk-$(TEAMCITY_BUILD_ID)
-PF9_IMAGE_TAG=$(etcd_image_name):${ETCD_VERSION}
+image_name = ${registry_url}/platform9/etcd
+DOCKERFILE?=$(CURDIR)/Dockerfile-release
+UPSTREAM_VERSION?=$(shell git describe --tags HEAD | sed 's/-.*//' )
+image_tag = $(UPSTREAM_VERSION)-pmk-$(TEAMCITY_BUILD_ID)
+PF9_TAG=$(image_name):${image_tag}
 DOCKERARGS=
 ifdef HTTP_PROXY
 	DOCKERARGS += --build-arg http_proxy=$(HTTP_PROXY)
@@ -201,19 +201,19 @@ build-docker-release-master:
 	$(info ETCD_VERSION: $(ETCD_VERSION))
 	cp ./Dockerfile-release ./bin/Dockerfile-release
 	docker build \
-	  --tag $(PF9_IMAGE_TAG) \
+	  --tag gcr.io/etcd-development/etcd:$(ETCD_VERSION) \
 	  --file ./bin/Dockerfile-release \
 	  ./bin
 	rm -f ./bin/Dockerfile-release
 
 	docker run \
 	  --rm \
-	  $(PF9_IMAGE_TAG) \
+	  gcr.io/etcd-development/etcd:$(ETCD_VERSION) \
 	  /bin/sh -c "/usr/local/bin/etcd --version && /usr/local/bin/etcdctl version"
 
 push-docker-release-master:
 	$(info ETCD_VERSION: $(ETCD_VERSION))
-	gcloud docker -- push $(PF9_IMAGE_TAG)
+	gcloud docker -- push gcr.io/etcd-development/etcd:$(ETCD_VERSION)
 
 
 
@@ -528,3 +528,12 @@ pull-docker-functional:
 	$(info GO_VERSION: $(GO_VERSION))
 	$(info ETCD_VERSION: $(ETCD_VERSION))
 	docker pull gcr.io/etcd-development/etcd-functional:go$(GO_VERSION)
+
+pf9-image: | $(CURDIR) ; $(info Building Docker image for pf9 Repo...) @ ## Build kube-rbac-proxy docker image
+	@docker build --tag $(PF9_TAG) --file $(DOCKERFILE)  $(CURDIR) $(DOCKERARGS)
+	echo ${PF9_TAG} > $(CURDIR)/container-tag
+
+pf9-push: 
+	docker login
+	docker push $(PF9_TAG)\
+	&& docker rmi $(PF9_TAG)
