@@ -1,7 +1,7 @@
 FROM --platform=linux/amd64 gcr.io/distroless/static-debian11
 
-ADD etcd /usr/local/bin/
-ADD etcdctl /usr/local/bin/
+ADD bin/etcd /usr/local/bin/
+ADD bin/etcdctl /usr/local/bin/
 
 WORKDIR /var/etcd/
 WORKDIR /var/lib/etcd/
